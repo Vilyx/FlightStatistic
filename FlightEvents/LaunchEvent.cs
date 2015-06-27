@@ -51,6 +51,28 @@ namespace OLDD
 
 			return totalTime;
 		}
+		public long GetTotalMissionTime()
+		{
+			long totalTime = 0;
+			FlightEvent currentStart = this;
+			for (int i = 0; i < subsequentEvents.Count; i++)
+			{
+				FlightEvent flightEvent = subsequentEvents[i];
+				if (flightEvent is LaunchEvent)
+				{
+					currentStart = flightEvent;
+				}
+				else if (flightEvent is EndFlightEvent || flightEvent is FinishMissionEvent)
+				{
+					totalTime += flightEvent.time - currentStart.time;
+					currentStart = null;
+				}
+			}
+			if (currentStart != null)
+				totalTime += EventProcessor.GetTimeInTicks() - currentStart.time;
+
+			return totalTime;
+		}
 
 		public FlightEvent GetLastEvent()
 		{
@@ -63,6 +85,10 @@ namespace OLDD
 			if (subsequentEvents.Count == 0) return -1;
 			FlightEvent flightEvent = subsequentEvents[subsequentEvents.Count - 1];
 			if (flightEvent is EndFlightEvent)
+			{
+				return flightEvent.time;
+			}
+			else if (flightEvent is FinishMissionEvent)
 			{
 				return flightEvent.time;
 			}
@@ -79,6 +105,10 @@ namespace OLDD
 			if (flightEvent is EndFlightEvent)
 			{
 				return (flightEvent as EndFlightEvent).finalMass;
+			}
+			else if (flightEvent is FinishMissionEvent)
+			{
+				return (flightEvent as FinishMissionEvent).finalMass;
 			}
 			else
 			{
@@ -137,6 +167,10 @@ namespace OLDD
 				if (flightEvent is EndFlightEvent)
 				{
 					return (flightEvent as EndFlightEvent).crewMembers;
+				}
+				else if (flightEvent is FinishMissionEvent)
+				{
+					return (flightEvent as FinishMissionEvent).crewMembers;
 				}
 			}
 			return new List<string>();
@@ -228,6 +262,16 @@ namespace OLDD
 			foreach (var item in subsequentEvents)
 			{
 				if (item is VesselDestroyedEvent)
+					return true;
+			}
+			return false;
+		}
+
+		internal bool IsMissionFinished()
+		{
+			foreach (var item in subsequentEvents)
+			{
+				if (item is FinishMissionEvent)
 					return true;
 			}
 			return false;

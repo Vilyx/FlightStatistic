@@ -58,12 +58,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CrewEvents\DeathCrewEvent.cs" />
     <Compile Include="CrewEvents\DockingCrewEvent.cs" />
     <Compile Include="CrewEvents\EvaCrewEndEvent.cs" />
     <Compile Include="CrewEvents\EvaCrewEvent.cs" />
     <Compile Include="CrewEvents\LandingCrewEvent.cs" />
     <Compile Include="DataHolder.cs" />
     <Compile Include="FlightEvents\DockingEvent.cs" />
+    <Compile Include="FlightEvents\FinishMissionEvent.cs" />
     <Compile Include="FlightEvents\EvaEvent.cs" />
     <Compile Include="FlightEvents\FlyingEvent.cs" />
     <Compile Include="FlightEvents\LandingEvent.cs" />

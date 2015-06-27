@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 
 namespace OLDD
 {
@@ -111,6 +112,7 @@ namespace OLDD
 				LaunchCrewEvent crewSubLaunch = new LaunchCrewEvent();
 				crewSubLaunch.name = kerbal.name;
 				crewSubLaunch.time = currentLaunchTime;
+				crewSubLaunch.vesselName = vessel.vesselName;
 
 				LaunchCrewEvent crewLaunch = GetKerbalLaunch(kerbal.name);
 				if (crewLaunch == null)
@@ -418,8 +420,8 @@ namespace OLDD
 			long time = 0;
 			foreach (var item in launches)
 			{
-				if(item.GetLastEvent() is EndFlightEvent && item.crewMembers.Count > 0)
-					time += item.GetTotalFlightTime();
+				if ((item.GetLastEvent() is EndFlightEvent || item.IsMissionFinished()) && item.crewMembers.Count > 0)
+					time += item.GetTotalMissionTime();
 			}
 			return time;
 		}
@@ -428,23 +430,22 @@ namespace OLDD
 			long time = 0;
 			foreach (var item in launches)
 			{
-				if (item.GetLastEvent() is EndFlightEvent && item.crewMembers.Count == 0)
-					time += item.GetTotalFlightTime();
+				if ((item.GetLastEvent() is EndFlightEvent || item.IsMissionFinished()) && item.crewMembers.Count == 0)
+					time += item.GetTotalMissionTime();
 			}
 			return time;
 		}
 
 		internal void OnCrash(EventReport data)
 		{
-			AttachNode node1 = data.origin.attachNodes[0];
-			AttachNode node2;
-			if( data.origin.attachNodes.Count > 1)
-				node2 = data.origin.attachNodes[1];
-			LaunchEvent launch = GetLaunchByRootPartId(data.origin.flightID.ToString());
-			for (int i = 0; i < data.origin.attachNodes.Count && launch == null; i++)
+			LaunchEvent launch = null;
+			foreach (var part in data.origin.attachNodes)
 			{
-				launch = GetLaunchByRootPartId(data.origin.attachNodes[i].attachedPartId.ToString());
+				if (launch != null) break;
+				launch = GetLaunchByRootPartId(data.origin.flightID.ToString());
 			}
+			
+			
 			if (launch != null)
 			{
 				VesselDestroyedEvent destroyed = new VesselDestroyedEvent();
@@ -489,6 +490,59 @@ namespace OLDD
 					endFlight.crewMembers.Add(kerbal.name);
 				}
 				
+				launch.AddEvent(endFlight);
+			}
+		}
+
+		public void OnFinishMission(LaunchEvent launch)
+		{
+			FinishMissionEvent endMission = new FinishMissionEvent();
+			Vessel[] vessels = GameObject.FindObjectsOfType<Vessel>();
+			Vessel vessel = null;
+			foreach (var item in vessels)
+			{
+				if (item.id.ToString() == launch.shipID && item.vesselName == launch.shipName)
+					vessel = item;
+			}
+			if (vessel == null) return;
+			float sumMass = 0;
+			foreach (var part in vessel.protoVessel.protoPartSnapshots)
+			{
+				sumMass += part.mass;
+			}
+			endMission.finalMass = sumMass;
+			endMission.crewMembers = new List<string>();
+			foreach (ProtoCrewMember kerbal in vessel.protoVessel.GetVesselCrew())
+			{
+				endMission.crewMembers.Add(kerbal.name);
+			}
+			launch.AddEvent(endMission);
+		}
+
+		internal void OnCrewKilled(EventReport data)
+		{
+			string kerbalName = data.sender;
+			DeathCrewEvent death = new DeathCrewEvent();
+			LaunchCrewEvent kerbal = GetKerbalLaunch(kerbalName);
+			if(kerbal != null)
+				kerbal.AddEvent(death);
+		}
+
+		internal void OnBeforeSave()
+		{
+			if (FlightGlobals.ActiveVessel == null) return;
+			var state = FlightGlobals.ActiveVessel.state;
+			LaunchEvent launch = GetLaunchByVesselId(FlightGlobals.ActiveVessel.id.ToString());
+			
+			if (launch != null && state == Vessel.State.DEAD)
+			{
+				if (launch.GetLastEvent() is EndFlightEvent) return;
+				VesselDestroyedEvent destroyed = new VesselDestroyedEvent();
+				launch.AddEvent(destroyed);
+
+				EndFlightEvent endFlight = new EndFlightEvent();
+				endFlight.finalMass = 0;
+				endFlight.crewMembers = new List<string>();
 				launch.AddEvent(endFlight);
 			}
 		}

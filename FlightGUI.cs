@@ -54,7 +54,7 @@ namespace OLDD
 		private bool needToShowKerbal = false;
 
 		private Rect flightWindowRect = new Rect(40, 100, 800, 500);
-		private Rect kerbalWindowRect = new Rect(40, 100, 400, 500);
+		private Rect kerbalWindowRect = new Rect(40, 100, 800, 500);
 
 		private static readonly String ROOT_PATH = GetRootPath();
 		private static readonly String SAVE_BASE_FOLDER = ROOT_PATH + "/saves/"; // suggestion/hint from Cydonian Monk
@@ -62,11 +62,13 @@ namespace OLDD
 		private GUIStyle activeStyle;
 		private GUIStyle selectedStyle;
 		private GUIStyle endedStyle;
+		private GUIStyle missionFinishedStyle;
 		private GUIStyle destroyedStyle;
 		private GUIStyle proceedingStyle;
 		private int mouseOverLineNumKerb;
 		private bool useNativeGui = true;
 		private bool reverseFlights = true;
+		private Vector2 shipsScrollViewVector;
 
 		void Awake()
 		{
@@ -95,6 +97,8 @@ namespace OLDD
 				endedStyle.normal.textColor = Color.green;
 				destroyedStyle = new GUIStyle(GUI.skin.label);
 				destroyedStyle.normal.textColor = Color.red;
+				missionFinishedStyle = new GUIStyle(GUI.skin.label);
+				missionFinishedStyle.normal.textColor = Color.blue;
 				proceedingStyle = new GUIStyle(GUI.skin.label);
 				proceedingStyle.normal.textColor = new Color(0.7f, 0.7f, 0.7f);
 			}
@@ -113,11 +117,11 @@ namespace OLDD
 				mainWindowRect = GUI.Window(1001, mainWindowRect, DrawMainWindow, "Statistic");
 				if (needToShowFlight && toolbarInt == 0)
 				{
-					flightWindowRect = GUI.Window(1002, flightWindowRect, DrawFlightWindow, "Flight");
+					flightWindowRect = GUI.Window(1002, flightWindowRect, DrawFlightWindow, "");
 				}
 				else if (needToShowKerbal && toolbarInt == 1)
 				{
-					kerbalWindowRect = GUI.Window(1003, kerbalWindowRect, DrawKerbalWindow, "Kerbal");
+					kerbalWindowRect = GUI.Window(1003, kerbalWindowRect, DrawKerbalWindow, "");
 				}
 			}
 			GUI.skin.label.fontSize = temp;
@@ -137,6 +141,7 @@ namespace OLDD
 			GameEvents.OnScienceRecieved.Add(EventProcessor.Instance.OnScienceReceived);
 
 			//GameEvents.onVesselTerminated.Add(EventProcessor.Instance.OnVesselTerminated);
+			GameEvents.onCrewKilled.Add(EventProcessor.Instance.OnCrewKilled);
 			GameEvents.onCrash.Add(EventProcessor.Instance.OnCrash);
 			GameEvents.onVesselTerminated.Add(EventProcessor.Instance.OnVesselTerminated);
 			GameEvents.onCrashSplashdown.Add(EventProcessor.Instance.OnCrash);
@@ -208,6 +213,7 @@ namespace OLDD
 		}
 		public static void SaveData()
 		{
+			EventProcessor.Instance.OnBeforeSave();
 			String savePath = SAVE_BASE_FOLDER + HighLogic.SaveFolder + "/";
 			using (StreamWriter sw = new StreamWriter(File.Open(savePath + "statistic_new.json", FileMode.OpenOrCreate), Encoding.UTF8))
 			{
@@ -251,8 +257,13 @@ namespace OLDD
 			// Begin the ScrollView
 			scrollViewVector = GUILayout.BeginScrollView(scrollViewVector);
 			List<LaunchCrewEvent> kerbals = EventProcessor.Instance.crewLaunches;
+			for (int i = 0; i < kerbals.Count; i++)
+			{
+				kerbals[i].posInTable = i+1;
+			}
 
 			GUILayout.BeginHorizontal();
+			DrawKerbalsColumn(kerbals, "№", "posInTable", (object obj) => { return obj.ToString(); });
 			DrawKerbalsColumn(kerbals, "Kerbal name", "name", (object obj) => { return obj.ToString(); });
 			DrawKerbalsColumn(kerbals, "Flights", "GetLaunchesCount", (object obj) => { return obj.ToString(); });
 			DrawKerbalsColumn(kerbals, "Total flight time", "GetTotalFlightTime", (object obj) => { return TicksToTotalTime(obj.ToString()); });
@@ -293,6 +304,8 @@ namespace OLDD
 				
 				if (mouseOverLineNumKerb == i)
 					GUILayout.Label(txt, selectedStyle);
+				else if (!kerbals[i].IsAlive())
+					GUILayout.Label(txt, destroyedStyle);
 				else
 					GUILayout.Label(txt, proceedingStyle);
 				//GUILayout.FlexibleSpace();
@@ -323,6 +336,19 @@ namespace OLDD
 			{
 				needToShowKerbal = false;
 			}
+			LaunchCrewEvent kerbal = EventProcessor.Instance.crewLaunches[kerbalIdToShow];
+
+			Rect captionRect = new Rect(0, 2, kerbalWindowRect.width, 16);
+			string txt = "Kerbal: " + kerbal.name;
+			GUIStyle currentStyle;
+			if (!kerbal.IsAlive())
+				currentStyle = destroyedStyle;
+			else
+				currentStyle = proceedingStyle;
+			currentStyle.alignment = TextAnchor.MiddleCenter;
+			GUI.Label(captionRect, txt, currentStyle);
+			currentStyle.alignment = TextAnchor.MiddleLeft;
+
 			//количество полетов, длительность (накопительно), количество выходов в открытый космос и их общая длительность (накопительно), количество стыковок,  количество посадок.
 			GUILayout.BeginHorizontal();
 			GUILayout.BeginVertical();
@@ -333,10 +359,11 @@ namespace OLDD
 			GUILayout.Label("EVAs", boldtext);
 			GUILayout.Label("Dockings", boldtext);
 			GUILayout.Label("Landings", boldtext);
+			GUILayout.Label("Idle time", boldtext);
 			GUILayout.EndVertical();
 
 			GUILayout.BeginVertical();
-			LaunchCrewEvent kerbal = EventProcessor.Instance.crewLaunches[kerbalIdToShow];
+			
 			GUILayout.Label(kerbal.name);
 			GUILayout.Label(kerbal.GetLaunchesCount().ToString());
 			GUILayout.Label(TicksToTotalTime(kerbal.GetTotalFlightTime()));
@@ -344,6 +371,16 @@ namespace OLDD
 			GUILayout.Label(kerbal.GetEvasCount().ToString());
 			GUILayout.Label(kerbal.GetDockingsCount().ToString());
 			GUILayout.Label(kerbal.GetLandingsCount().ToString());
+			GUILayout.Label(TicksToTotalTime(kerbal.GetIdleTime()));
+			GUILayout.EndVertical();
+			GUILayout.BeginVertical();
+			GUILayout.Box("Ships");
+			shipsScrollViewVector = GUILayout.BeginScrollView(shipsScrollViewVector, GUILayout.Height((kerbalWindowRect.height - 130)));
+			foreach (string shipName in kerbal.GetShips())
+			{
+				GUILayout.Label(shipName);
+			}
+			GUILayout.EndScrollView();
 			GUILayout.EndVertical();
 			GUILayout.EndHorizontal();
 			GUI.DragWindow(new Rect(0, 0, 10000, 20));
@@ -356,7 +393,7 @@ namespace OLDD
 			List<LaunchEvent> launches = EventProcessor.Instance.launches.GetRange(0, EventProcessor.Instance.launches.Count);
 			for (int i = 0; i < launches.Count; i++)
 			{
-				launches[i].posInTable = i;
+				launches[i].posInTable = i+1;
 			}
 			if (reverseFlights)
 				launches.Reverse();
@@ -395,6 +432,8 @@ namespace OLDD
 					GUILayout.Label(txt, destroyedStyle);
 				else if (launches[i].GetEndDate() != -1)
 					GUILayout.Label(txt, endedStyle);
+				else if (launches[i].IsMissionFinished())
+					GUILayout.Label(txt, missionFinishedStyle);
 				else
 					GUILayout.Label(txt, proceedingStyle);
 				//GUILayout.FlexibleSpace();
@@ -421,10 +460,34 @@ namespace OLDD
 			{
 				needToShowFlight = false;
 			}
+			
+			
 			List<LaunchEvent> launches = EventProcessor.Instance.launches.GetRange(0, EventProcessor.Instance.launches.Count);
 			if (reverseFlights)
 				launches.Reverse();
 			LaunchEvent launch = launches[flightIdToShow];
+			if (!(launch.IsMissionFinished() || launch.GetLastEvent() is EndFlightEvent))
+			{
+				if (GUI.Button(new Rect(5, 2, 100, 16), "Finish mission"))
+				{
+					EventProcessor.Instance.OnFinishMission(launch);
+				}
+			}
+			Rect captionRect = new Rect(0, 2, flightWindowRect.width, 16);
+			string txt = "Flight №" + launch.posInTable + " - " + launch.shipName;
+			GUIStyle currentStyle;
+			if (FlightGlobals.ActiveVessel != null && FlightGlobals.ActiveVessel.id.ToString() == launch.shipID)
+				currentStyle = activeStyle;
+			else if (launch.IsDestroyed())
+				currentStyle = destroyedStyle;
+			else if (launch.GetEndDate() != -1)
+				currentStyle = endedStyle;
+			else
+				currentStyle = proceedingStyle;
+			currentStyle.alignment = TextAnchor.MiddleCenter;
+			GUI.Label(captionRect, txt, currentStyle);
+			currentStyle.alignment = TextAnchor.MiddleLeft;
+
 			GUILayout.BeginHorizontal();
 			GUILayout.BeginVertical(GUILayout.Width(100));
 			GUILayout.Label("Vessel", boldtext);

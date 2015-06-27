@@ -11,6 +11,9 @@ namespace OLDD
 	{
 		[JsonMember]
 		public string name;
+		public int posInTable;
+		[JsonMember]
+		public string vesselName;
 
 
 		public int GetLaunchesCount()
@@ -101,6 +104,55 @@ namespace OLDD
 					count++;
 			}
 			return count;
+		}
+
+		internal IEnumerable<string> GetShips()
+		{
+			List<string> ships = new List<string>();
+			ships.Add(vesselName);
+			foreach (var flightEvent in subsequentEvents)
+			{
+				if (flightEvent is LaunchCrewEvent)
+				{
+					var lauEv = flightEvent as LaunchCrewEvent;
+					ships.Add(lauEv.vesselName);
+				}
+			}
+			return ships;
+		}
+
+		internal object GetIdleTime()
+		{
+			long totalTime = 0;
+			FlightEvent currentEnd = null;
+			for (int i = 0; i < subsequentEvents.Count; i++)
+			{
+				FlightEvent flightEvent = subsequentEvents[i];
+				if (flightEvent is EndFlightCrewEvent)
+				{
+					currentEnd = flightEvent;
+				}
+				else if (currentEnd != null && flightEvent is LaunchCrewEvent)
+				{
+					currentEnd = null;
+				}
+			}
+			if (currentEnd != null)
+				totalTime += EventProcessor.GetTimeInTicks() - currentEnd.time;
+
+			return totalTime;
+		}
+
+		internal bool IsAlive()
+		{
+			foreach (var flightEvent in subsequentEvents)
+			{
+				if (flightEvent is DeathCrewEvent)
+				{
+					return false;
+				}
+			}
+			return true;
 		}
 	}
 }
