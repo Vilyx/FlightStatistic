@@ -67,8 +67,17 @@ namespace OLDD
 		private GUIStyle proceedingStyle;
 		private int mouseOverLineNumKerb;
 		private bool useNativeGui = true;
-		private bool reverseFlights = true;
 		private Vector2 shipsScrollViewVector;
+		private bool showMannedLaunches = true;
+		private bool showUnmannedLaunches = true;
+		private bool showMissionFinished = true;
+		private bool showEnded = true;
+		private bool showDestroyed = true;
+		private bool showInAction = true;
+		private bool reverseSortLaunches = true;
+		private SortLaunchesParameter sortLaunchesParameter = SortLaunchesParameter.DATE;
+		
+		
 
 		void Awake()
 		{
@@ -139,6 +148,7 @@ namespace OLDD
 			GameEvents.onCrewOnEva.Add(EventProcessor.Instance.OnCrewOnEva);
 			GameEvents.onCrewBoardVessel.Add(EventProcessor.Instance.OnCrewBoardVessel);
 			GameEvents.OnScienceRecieved.Add(EventProcessor.Instance.OnScienceReceived);
+			GameEvents.onVesselRename.Add(EventProcessor.Instance.OnVesselRename);
 
 			//GameEvents.onVesselTerminated.Add(EventProcessor.Instance.OnVesselTerminated);
 			GameEvents.onCrewKilled.Add(EventProcessor.Instance.OnCrewKilled);
@@ -148,6 +158,8 @@ namespace OLDD
 			GameEvents.onVesselSituationChange.Add(EventProcessor.Instance.OnVesselSituationChange);
 			GameEvents.onVesselSOIChanged.Add(EventProcessor.Instance.OnVesselSOIChanged);
 			GameEvents.onPartCouple.Add(EventProcessor.Instance.OnPartCouple);
+			GameEvents.onPartUndock.Add(EventProcessor.Instance.OnPartUndock);
+			GameEvents.onStageSeparation.Add(EventProcessor.Instance.OnStageSeparation);
 
 			GameEvents.onGameStateCreated.Add(OnGameStateCreated);
 			GameEvents.onGameStateLoad.Add(OnGameStateLoad);
@@ -345,8 +357,10 @@ namespace OLDD
 				currentStyle = destroyedStyle;
 			else
 				currentStyle = proceedingStyle;
+			currentStyle.fontStyle = FontStyle.Bold;
 			currentStyle.alignment = TextAnchor.MiddleCenter;
 			GUI.Label(captionRect, txt, currentStyle);
+			currentStyle.fontStyle = FontStyle.Normal;
 			currentStyle.alignment = TextAnchor.MiddleLeft;
 
 			//количество полетов, длительность (накопительно), количество выходов в открытый космос и их общая длительность (накопительно), количество стыковок,  количество посадок.
@@ -354,6 +368,7 @@ namespace OLDD
 			GUILayout.BeginVertical();
 			GUILayout.Label("Kerbal name", boldtext);
 			GUILayout.Label("Flights", boldtext);
+			GUILayout.Label("Max Gee", boldtext);
 			GUILayout.Label("Total flight time", boldtext);
 			GUILayout.Label("EVAs time", boldtext);
 			GUILayout.Label("EVAs", boldtext);
@@ -366,6 +381,7 @@ namespace OLDD
 			
 			GUILayout.Label(kerbal.name);
 			GUILayout.Label(kerbal.GetLaunchesCount().ToString());
+			GUILayout.Label(CorrectNumber(kerbal.maxGee.ToString()) + " G");
 			GUILayout.Label(TicksToTotalTime(kerbal.GetTotalFlightTime()));
 			GUILayout.Label(TicksToTotalTime(kerbal.GetTotalEvasTime()));
 			GUILayout.Label(kerbal.GetEvasCount().ToString());
@@ -388,34 +404,123 @@ namespace OLDD
 
 		private void DrawFlights()
 		{
+			float divideCoef = 6.5f;
 			// Begin the ScrollView
 			scrollViewVector = GUILayout.BeginScrollView(scrollViewVector);
+			GUILayout.BeginHorizontal();
+			showMannedLaunches = GUILayout.Toggle(showMannedLaunches, "Manned", GUILayout.Width(mainWindowRect.width / divideCoef));
+			if (!showMannedLaunches && !showUnmannedLaunches) showUnmannedLaunches = true;
+			showUnmannedLaunches = GUILayout.Toggle(showUnmannedLaunches, "Unmanned", GUILayout.Width(mainWindowRect.width / divideCoef));
+			if (!showMannedLaunches && !showUnmannedLaunches) showMannedLaunches = true;
+			showMissionFinished = GUILayout.Toggle(showMissionFinished, "Finished", GUILayout.Width(mainWindowRect.width / divideCoef));
+			showEnded = GUILayout.Toggle(showEnded, "Ended", GUILayout.Width(mainWindowRect.width / divideCoef));
+			showDestroyed = GUILayout.Toggle(showDestroyed, "Destroyed", GUILayout.Width(mainWindowRect.width / divideCoef));
+			showInAction = GUILayout.Toggle(showInAction, "InAction", GUILayout.Width(mainWindowRect.width / divideCoef));
+			GUILayout.EndHorizontal();
 			List<LaunchEvent> launches = EventProcessor.Instance.launches.GetRange(0, EventProcessor.Instance.launches.Count);
 			for (int i = 0; i < launches.Count; i++)
 			{
 				launches[i].posInTable = i+1;
 			}
-			if (reverseFlights)
-				launches.Reverse();
+
+			launches = filterLaunches(launches);
+			launches = sortLaunches(launches);
+			/*if (reverseFlights)
+				launches.Reverse();*/
 
 			GUILayout.BeginHorizontal();
-			DrawFlightsColumn(launches, "№", "posInTable", (object obj) => { return obj.ToString(); });
-			DrawFlightsColumn(launches, "Vessel", "shipName", (object obj) => { return obj.ToString(); });
-			DrawFlightsColumn(launches, "Launch date", "time", (object obj) => { return TicksToDate(obj.ToString()); });
-			DrawFlightsColumn(launches, "Cost", "launchCost", (object obj) => { return CorrectNumber(obj.ToString()); });
+			DrawFlightsColumn(0,launches, "№", "posInTable", (object obj) => { return obj.ToString(); });
+			DrawFlightsColumn(1,launches, "Vessel", "shipName", (object obj) => { return obj.ToString(); });
+			DrawFlightsColumn(4,launches, "Task", "GetTask", (object obj) => { return obj.ToString(); });
+			DrawFlightsColumn(2,launches, "Launch date", "time", (object obj) => { return TicksToDate(obj.ToString()); });
+			DrawFlightsColumn(3,launches, "Cost", "launchCost", (object obj) => { return CorrectNumber(obj.ToString()); });
 			GUILayout.EndHorizontal();
 			GUILayout.FlexibleSpace();
 			GUILayout.EndScrollView();
 			DrawTotals();
 		}
 
-		private void DrawFlightsColumn(List<LaunchEvent> launches, string columnName, string propName, Func<object, string> propProc)
+		private List<LaunchEvent> sortLaunches(List<LaunchEvent> launches)
+		{
+			if(sortLaunchesParameter == SortLaunchesParameter.DATE)
+				launches = launches.OrderBy(x => x.time).ToList();
+			else if (sortLaunchesParameter == SortLaunchesParameter.NAME)
+				launches = launches.OrderBy(x => x.shipName).ToList();
+			else if (sortLaunchesParameter == SortLaunchesParameter.COST)
+				launches = launches.OrderBy(x => x.launchCost).ToList();
+			else if (sortLaunchesParameter == SortLaunchesParameter.TASK)
+				launches = launches.OrderBy(x => x.GetTask()).ToList();
+			if(reverseSortLaunches)
+				launches.Reverse();
+			return launches;
+		}
+
+		private List<LaunchEvent> filterLaunches(List<LaunchEvent> launches)
+		{
+			List<LaunchEvent> le = new List<LaunchEvent>();
+			/*if (mouseOverLineNum == i)
+					GUILayout.Label(txt, selectedStyle);
+				else if (FlightGlobals.ActiveVessel != null && FlightGlobals.ActiveVessel.id.ToString() == launches[i].shipID)
+					GUILayout.Label(txt, activeStyle);
+				else if (launches[i].IsDestroyed())
+					GUILayout.Label(txt, destroyedStyle);
+				else if (launches[i].GetEndDate() != -1)
+					GUILayout.Label(txt, endedStyle);
+				else if (launches[i].IsMissionFinished())
+					GUILayout.Label(txt, missionFinishedStyle);
+				else
+					GUILayout.Label(txt, proceedingStyle);*/
+			foreach (var item in launches)
+			{
+				if ((showMannedLaunches && item.crewMembers.Count > 0 || showUnmannedLaunches && item.crewMembers.Count == 0) &&
+					(showMissionFinished && item.IsMissionFinished() || showEnded && item.GetEndDate() != -1 || showDestroyed && item.IsDestroyed() || item.GetEndDate() == -1 && showInAction))
+				{
+					le.Add(item);
+				}
+			}
+			return le;
+		}
+
+		private void DrawFlightsColumn(int sortIndex,List<LaunchEvent> launches, string columnName, string propName, Func<object, string> propProc)
 		{
 			GUILayout.BeginVertical();
 			GUI.color = normalColor;
 			//GUILayout.Box("Vessel");
 			if (GUILayout.Button(columnName, GUILayout.Height(15)))
-				reverseFlights = !reverseFlights;
+			{
+				if (sortIndex == 0 || sortIndex == 2)
+				{
+					if (sortLaunchesParameter == SortLaunchesParameter.DATE)
+						reverseSortLaunches = !reverseSortLaunches;
+					else
+						reverseSortLaunches = false;
+					sortLaunchesParameter = SortLaunchesParameter.DATE;
+				}
+				else if (sortIndex == 1)
+				{
+					if (sortLaunchesParameter == SortLaunchesParameter.NAME)
+						reverseSortLaunches = !reverseSortLaunches;
+					else
+						reverseSortLaunches = false;
+					sortLaunchesParameter = SortLaunchesParameter.NAME;
+				}
+				else if (sortIndex == 3)
+				{
+					if (sortLaunchesParameter == SortLaunchesParameter.COST)
+						reverseSortLaunches = !reverseSortLaunches;
+					else
+						reverseSortLaunches = false;
+					sortLaunchesParameter = SortLaunchesParameter.COST;
+				}
+				else if (sortIndex == 4)
+				{
+					if (sortLaunchesParameter == SortLaunchesParameter.TASK)
+						reverseSortLaunches = !reverseSortLaunches;
+					else
+						reverseSortLaunches = false;
+					sortLaunchesParameter = SortLaunchesParameter.TASK;
+				}
+			}
 
 			for (int i = 0; i < launches.Count; i++)
 			{
@@ -423,14 +528,27 @@ namespace OLDD
 				//GUILayout.FlexibleSpace();
 				Type type = launches[i].GetType();
 				FieldInfo pinfo = type.GetField(propName);
-				string txt = propProc(pinfo.GetValue(launches[i]));
+				string txt = "";
+				if (pinfo != null)
+				{
+					txt = propProc(pinfo.GetValue(launches[i]));
+				}
+				else
+				{
+					MethodInfo minfo = type.GetMethod(propName);
+					var res = minfo.Invoke(launches[i], null);
+					txt = propProc(res.ToString());
+				}
+
+				if (txt == null) txt = "";
+
 				if (mouseOverLineNum == i)
 					GUILayout.Label(txt, selectedStyle);
 				else if (FlightGlobals.ActiveVessel != null && FlightGlobals.ActiveVessel.id.ToString() == launches[i].shipID)
 					GUILayout.Label(txt, activeStyle);
 				else if (launches[i].IsDestroyed())
 					GUILayout.Label(txt, destroyedStyle);
-				else if (launches[i].GetEndDate() != -1)
+				else if (launches[i].GetEndDate() != -1 && launches[i].IsFlightEnded())
 					GUILayout.Label(txt, endedStyle);
 				else if (launches[i].IsMissionFinished())
 					GUILayout.Label(txt, missionFinishedStyle);
@@ -447,7 +565,7 @@ namespace OLDD
 					{
 						mouseOverLineNum = i;
 						if(Event.current.clickCount == 2)
-							ClickedFlight(i);
+							ClickedFlight(launches[i].posInTable - 1);
 					}
 				}
 			}
@@ -463,12 +581,12 @@ namespace OLDD
 			
 			
 			List<LaunchEvent> launches = EventProcessor.Instance.launches.GetRange(0, EventProcessor.Instance.launches.Count);
-			if (reverseFlights)
-				launches.Reverse();
+			/*if (reverseFlights)
+				launches.Reverse();*/
 			LaunchEvent launch = launches[flightIdToShow];
 			if (!(launch.IsMissionFinished() || launch.GetLastEvent() is EndFlightEvent))
 			{
-				if (GUI.Button(new Rect(5, 2, 100, 16), "Finish mission"))
+				if (GUI.Button(new Rect(5, flightWindowRect.height - 22, 100, 20), "Finish mission"))
 				{
 					EventProcessor.Instance.OnFinishMission(launch);
 				}
@@ -484,9 +602,13 @@ namespace OLDD
 				currentStyle = endedStyle;
 			else
 				currentStyle = proceedingStyle;
+			currentStyle.fontStyle = FontStyle.Bold;
 			currentStyle.alignment = TextAnchor.MiddleCenter;
 			GUI.Label(captionRect, txt, currentStyle);
+			currentStyle.fontStyle = FontStyle.Normal;
 			currentStyle.alignment = TextAnchor.MiddleLeft;
+
+			
 
 			GUILayout.BeginHorizontal();
 			GUILayout.BeginVertical(GUILayout.Width(100));
@@ -498,11 +620,13 @@ namespace OLDD
 			GUILayout.Label("Docked", boldtext);
 			GUILayout.Label("EVAs", boldtext);
 			GUILayout.Label("Max speed", boldtext);
+			GUILayout.Label("Max Gee", boldtext);
 			GUILayout.Label("Landings", boldtext);
 			GUILayout.Label("End date", boldtext);
 			GUILayout.Label("Duration", boldtext);
 			GUILayout.Label("Final mass", boldtext);
 			GUILayout.Label("Science points", boldtext);
+			GUILayout.Label("Biomes", boldtext);
 			GUILayout.EndVertical();
 
 			GUILayout.BeginVertical(GUILayout.Width(400));
@@ -517,6 +641,7 @@ namespace OLDD
 			GUILayout.Label(launch.GetDockings().ToString());
 			GUILayout.Label(launch.GetEvas().ToString());
 			GUILayout.Label(CorrectNumber(launch.maxSpeed.ToString()) + "m/s");
+			GUILayout.Label(CorrectNumber(launch.maxGee.ToString()) + " G");
 			GUILayout.Label(launch.GetLandingsCount().ToString());
 
 			long endDate = launch.GetEndDate();
@@ -536,6 +661,7 @@ namespace OLDD
 			string sciencePointsText = "-";
 			if (sciencePoints > 0) sciencePointsText = CorrectNumber(sciencePoints.ToString());
 			GUILayout.Label(sciencePointsText);
+			GUILayout.Label(launch.GetBiomes());
 			GUILayout.EndVertical();
 
 			GUILayout.BeginVertical();
@@ -585,8 +711,14 @@ namespace OLDD
 			GUILayout.BeginHorizontal();
 			//общая стоимость (увеличивается с каждым полетом), общее количество полетов, общая длительность.
 			GUILayout.Label("Total cost: " + EventProcessor.Instance.GetTotalCost() + "\t");
-			GUILayout.Label("Total launches: " + EventProcessor.Instance.GetTotalLaunches() + "\t");
-			GUILayout.Label("Total time manned: " + TicksToTotalTime(EventProcessor.Instance.GetTotalTimePilots()) + "  unmanned: " + TicksToTotalTime(EventProcessor.Instance.GetTotalTimeBots()));
+			GUILayout.BeginVertical();
+			GUILayout.Label("Total launches: " + EventProcessor.Instance.GetTotalLaunches() + "    manned: " + EventProcessor.Instance.GetTotalTimesPilots());
+			GUILayout.Label("                                       unmanned: " + EventProcessor.Instance.GetTotalTimesBots());
+			GUILayout.EndVertical();
+			GUILayout.BeginVertical();
+			GUILayout.Label("Total time manned: " + TicksToTotalTime(EventProcessor.Instance.GetTotalTimePilots()));
+			GUILayout.Label("               unmanned: " + TicksToTotalTime(EventProcessor.Instance.GetTotalTimeBots()));
+			GUILayout.EndVertical();
 			GUILayout.EndHorizontal();
 		}
 

@@ -7,8 +7,9 @@ using System.Text;
 namespace OLDD
 {
 	[JsonOptIn]
-	class LandingCrewEvent : FlightEvent
+	class MaxGeeCrewEvent : FlightEvent
 	{
-		
+		[JsonMember]
+		public double gee;
 	}
 }

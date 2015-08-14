@@ -27,6 +27,17 @@ namespace OLDD
 				if (currentVesselSpeed > activeLaunch.maxSpeed)
 					activeLaunch.maxSpeed = currentVesselSpeed;
 
+				if (activeLaunch.maxGee < FlightGlobals.ActiveVessel.geeForce)
+					activeLaunch.maxGee = FlightGlobals.ActiveVessel.geeForce;
+				foreach (ProtoCrewMember kerbal in FlightGlobals.ActiveVessel.GetVesselCrew())
+				{
+					LaunchCrewEvent crewLaunch = GetKerbalLaunch(kerbal.name);
+					if (crewLaunch.maxGee < FlightGlobals.ActiveVessel.geeForce)
+					{
+						crewLaunch.maxGee = FlightGlobals.ActiveVessel.geeForce;
+					}
+				}
+
 				if (activeLaunch.GetLastEvent() is LandingEvent)
 				{
 					double altitude = FlightGlobals.ActiveVessel.RevealAltitude();
@@ -44,6 +55,28 @@ namespace OLDD
 				MaxSpeedEvent maxSpEv = new MaxSpeedEvent();
 				maxSpEv.speed = activeLaunch.maxSpeed;
 				activeLaunch.AddEvent(maxSpEv);
+			}
+		}
+		public void RecordMaxGee()
+		{
+			if (FlightGlobals.ActiveVessel == null) return;
+			LaunchEvent activeLaunch = GetLaunch(FlightGlobals.ActiveVessel);
+			if (activeLaunch != null)
+			{
+				MaxGeeEvent maxGeeEv = new MaxGeeEvent();
+				maxGeeEv.gee = activeLaunch.maxGee;
+				activeLaunch.AddEvent(maxGeeEv);
+
+				foreach (ProtoCrewMember kerbal in FlightGlobals.ActiveVessel.GetVesselCrew())
+				{
+					LaunchCrewEvent crewLaunch = GetKerbalLaunch(kerbal.name);
+					if (crewLaunch.maxGee < activeLaunch.maxGee)
+					{
+						MaxGeeCrewEvent geeEv = new MaxGeeCrewEvent();
+						geeEv.gee = activeLaunch.maxGee;
+						crewLaunch.AddEvent(geeEv);
+					}
+				}
 			}
 		}
 		public void OnLaunch(EventReport data)
@@ -65,6 +98,7 @@ namespace OLDD
 		{
 			LaunchEvent launch = new LaunchEvent();
 			launch.shipName = vessel.protoVessel.vesselName;
+			if (launch.shipName == null) launch.shipName = "Just decoupled";
 			launch.shipID = vessel.id.ToString();
 			launch.rootPartID = vessel.rootPart.flightID.ToString();
 			launch.time = GetTimeInTicks();
@@ -228,9 +262,12 @@ namespace OLDD
 			{
 				if (data.from == Vessel.Situations.FLYING && data.to == Vessel.Situations.SUB_ORBITAL)
 					RecordOrbitReaching(data.host);
+				if (data.to == Vessel.Situations.ORBITING)
+					RecordStableOrbit(data.host);
 
-				if (data.from == Vessel.Situations.FLYING && (data.to == Vessel.Situations.LANDED ||
-																data.to == Vessel.Situations.SPLASHED) && data.host.vesselType != VesselType.Debris)
+				if ((data.from == Vessel.Situations.FLYING || data.from == Vessel.Situations.SUB_ORBITAL)
+				    && (data.to == Vessel.Situations.LANDED || data.to == Vessel.Situations.SPLASHED) 
+				    && data.host.vesselType != VesselType.Debris)
 				{
 					RecordLanding(data.host);
 				}
@@ -255,6 +292,7 @@ namespace OLDD
 			if (vessel.isEVA) return;
 			LandingEvent landing = new LandingEvent();
 			landing.mainBodyName = vessel.mainBody.name;
+			landing.biome = getBiomeName(vessel.mainBody, vessel.longitude, vessel.latitude);
 			LaunchEvent launch = GetLaunch(vessel);
 			if (launch != null)
 			{
@@ -276,7 +314,45 @@ namespace OLDD
 				crewLaunch.AddEvent(landingCrewEvent);
 			}
 		}
+		private int getBiomeIndex(CelestialBody body, double lon, double lat)
+		{
+			if (body.BiomeMap == null) return -1;
 
+			CBAttributeMapSO.MapAttribute att = body.BiomeMap.GetAtt(Mathf.Deg2Rad * lat, Mathf.Deg2Rad * lon);
+			for (int i = 0; i < body.BiomeMap.Attributes.Length; ++i)
+			{
+				if (body.BiomeMap.Attributes[i] == att)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+		internal double fixLat(double lat)
+		{
+			return (lat + 180 + 90) % 180;
+		}
+
+		internal double fixLon(double lon)
+		{
+			return (lon + 360 + 180) % 360;
+		}
+		internal CBAttributeMapSO.MapAttribute getBiome(CelestialBody body, double lon, double lat)
+		{
+			if (body.BiomeMap == null) return null;
+			int i = getBiomeIndex(body, lon, lat);
+			if (i == -1)
+				return null;
+			return body.BiomeMap.Attributes[i];
+		}
+
+		internal string getBiomeName(CelestialBody body, double lon, double lat)
+		{
+			CBAttributeMapSO.MapAttribute a = getBiome(body, lon, lat);
+			if (a == null)
+				return "unknown";
+			return a.name;
+		}
 		public static long GetTimeInTicks()
 		{
 			return (long)(Planetarium.GetUniversalTime() * TimeSpan.TicksPerSecond);
@@ -380,6 +456,7 @@ namespace OLDD
 			if (activeLaunch != null)
 			{
 				activeLaunch.maxSpeed = activeLaunch.GetEventMaxSpeed();
+				activeLaunch.maxGee = activeLaunch.GetEventMaxGee();
 			}
 		}
 
@@ -435,6 +512,26 @@ namespace OLDD
 			}
 			return time;
 		}
+		internal string GetTotalTimesPilots()
+		{
+			long times = 0;
+			foreach (var item in launches)
+			{
+				if (item.crewMembers.Count > 0)
+					times++;
+			}
+			return times.ToString();
+		}
+		internal string GetTotalTimesBots()
+		{
+			long times = 0;
+			foreach (var item in launches)
+			{
+				if (item.crewMembers.Count == 0)
+					times++;
+			}
+			return times.ToString();
+		}
 
 		internal void OnCrash(EventReport data)
 		{
@@ -456,7 +553,6 @@ namespace OLDD
 				endFlight.crewMembers = new List<string>();
 				launch.AddEvent(endFlight);
 			}
-			
 		}
 
 
@@ -533,7 +629,11 @@ namespace OLDD
 			if (FlightGlobals.ActiveVessel == null) return;
 			var state = FlightGlobals.ActiveVessel.state;
 			LaunchEvent launch = GetLaunchByVesselId(FlightGlobals.ActiveVessel.id.ToString());
-			
+			if (launch != null)
+			{
+				RecordMaxSpeed();
+				RecordMaxGee();
+			}
 			if (launch != null && state == Vessel.State.DEAD)
 			{
 				if (launch.GetLastEvent() is EndFlightEvent) return;
@@ -544,6 +644,67 @@ namespace OLDD
 				endFlight.finalMass = 0;
 				endFlight.crewMembers = new List<string>();
 				launch.AddEvent(endFlight);
+			}
+		}
+
+		private void RecordStableOrbit(Vessel vessel)
+		{
+			LaunchEvent launch = GetLaunch(vessel);
+			if (launch != null)
+			{
+ 				StableOrbitEvent stableEvent = new StableOrbitEvent();
+				launch.AddEvent(stableEvent);
+			}
+			/*if (FlightGlobals.ActiveVessel == null) return;
+			FlightGlobals.ActiveVessel.*/
+		}
+
+		internal void OnVesselRename(GameEvents.HostedFromToAction<Vessel, string> data)
+		{
+			LaunchEvent launch = GetLaunch(data.host);
+			if (launch != null)
+			{
+				launch.shipName = data.to;
+			}
+
+		}
+
+		internal void OnPartUndock(Part data)
+		{
+			OnVesselSeparate(data.vessel);
+		}
+
+		internal void OnStageSeparation(EventReport data)
+		{
+			foreach (var ves in FlightGlobals.Vessels)
+			{
+				if (ves.missionTime < 0.01)
+					OnVesselSeparate(ves);
+			}
+		}
+		internal void OnVesselSeparate(Vessel vessel)
+		{
+			LaunchEvent launch = GetLaunch(vessel);
+			int cmdPodsCount = 0;
+			foreach (var part in vessel.parts)
+			{
+				var modules = part.Modules.GetModules<ModuleCommand>();
+				if (modules.Count > 0)
+				{
+					cmdPodsCount++;
+				}
+			}
+			if (launch != null && launch.parts.Count > cmdPodsCount)
+			{
+				foreach (var part in vessel.parts)
+				{
+					var modules = part.Modules.GetModules<ModuleCommand>();
+					if (modules.Count > 0)
+					{
+						launch.parts.RemoveAll((StatisticVehiclePart statisticPart) => { return statisticPart.partID == part.flightID.ToString(); });
+					}
+				}
+				RecordLaunch(vessel);
 			}
 		}
 	}

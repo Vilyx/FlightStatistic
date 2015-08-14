@@ -11,5 +11,7 @@ namespace OLDD
 	{
 		[JsonMember]
 		public string mainBodyName;
+		[JsonMember]
+		public string biome;
 	}
 }

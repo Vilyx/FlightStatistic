@@ -63,6 +63,7 @@
     <Compile Include="CrewEvents\EvaCrewEndEvent.cs" />
     <Compile Include="CrewEvents\EvaCrewEvent.cs" />
     <Compile Include="CrewEvents\LandingCrewEvent.cs" />
+    <Compile Include="CrewEvents\MaxGeeCrewEvent.cs" />
     <Compile Include="DataHolder.cs" />
     <Compile Include="FlightEvents\DockingEvent.cs" />
     <Compile Include="FlightEvents\FinishMissionEvent.cs" />
@@ -74,8 +75,10 @@
     <Compile Include="FlightEvents\EndFlightEvent.cs" />
     <Compile Include="EventProcessor.cs" />
     <Compile Include="FlightEvent.cs" />
+    <Compile Include="FlightEvents\MaxGeeEvent.cs" />
     <Compile Include="FlightEvents\MaxSpeedEvent.cs" />
     <Compile Include="FlightEvents\ScienceEvent.cs" />
+    <Compile Include="FlightEvents\StableOrbitEvent.cs" />
     <Compile Include="FlightEvents\VesselDestroyedEvent.cs" />
     <Compile Include="FlightStatistic.cs" />
     <Compile Include="FlightGUI.cs" />
@@ -85,6 +88,7 @@
     <Compile Include="PartType.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SOIChangeEvent.cs" />
+    <Compile Include="SortLaunchesParameter.cs" />
     <Compile Include="StatisticVehiclePart.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

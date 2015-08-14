@@ -13,9 +13,29 @@ namespace OLDD
 		public string name;
 		public int posInTable;
 		[JsonMember]
+		public double maxGee;
+		[JsonMember]
 		public string vesselName;
 
-
+		public override bool Revert(long currentTime)
+		{
+			bool removed = base.Revert(currentTime);
+			maxGee = GetEventMaxGee();
+			return removed;
+		}
+		internal double GetEventMaxGee()
+		{
+			double gee = 0;
+			for (int i = 0; i < subsequentEvents.Count; i++)
+			{
+				FlightEvent flightEvent = subsequentEvents[i];
+				if (flightEvent is MaxGeeCrewEvent)
+				{
+					gee = (flightEvent as MaxGeeCrewEvent).gee;
+				}
+			}
+			return gee;
+		}
 		public int GetLaunchesCount()
 		{
 			int count = 1;
@@ -105,19 +125,48 @@ namespace OLDD
 			}
 			return count;
 		}
+		private string TicksToShortTime(object p)
+		{
+			if (p == null) return "-";
+			long ticks = long.Parse(p.ToString());
+			long days = ticks / (TimeSpan.TicksPerDay / 4);
+			long hours = ticks % (TimeSpan.TicksPerDay / 4) / TimeSpan.TicksPerHour;
+			long minutes = ticks % TimeSpan.TicksPerHour / TimeSpan.TicksPerMinute;
+			if(hours < 10 && days < 1)
+				return days.ToString() + "d " + hours.ToString() + "h " + minutes + "m";
+			return days.ToString() + "d " + hours.ToString() + "h";
+		}
 
 		internal IEnumerable<string> GetShips()
 		{
 			List<string> ships = new List<string>();
-			ships.Add(vesselName);
+			//ships.Add(vesselName);
+			LaunchCrewEvent lauEv = this;
+			List<EvaCrewEvent> evas = new List<EvaCrewEvent>();
 			foreach (var flightEvent in subsequentEvents)
 			{
 				if (flightEvent is LaunchCrewEvent)
 				{
-					var lauEv = flightEvent as LaunchCrewEvent;
-					ships.Add(lauEv.vesselName);
+					evas = new List<EvaCrewEvent>();
+					lauEv = flightEvent as LaunchCrewEvent;
+				}
+				else if (flightEvent is EvaCrewEvent)
+				{
+					evas.Add(flightEvent as EvaCrewEvent);
+				}
+				else if (flightEvent is EndFlightCrewEvent)
+				{
+					ships.Add(lauEv.vesselName + "(" + TicksToShortTime(flightEvent.time - lauEv.time) + ", EVA - " + evas.Count.ToString() + ")");
+					lauEv = null;
+					evas = new List<EvaCrewEvent>();
 				}
 			}
+
+			if (lauEv != null)
+			{
+				ships.Add(lauEv.vesselName + "(" + TicksToShortTime(EventProcessor.GetTimeInTicks() - lauEv.time) + ", EVA - " + evas.Count.ToString() + ")");
+			}
+
 			return ships;
 		}
 

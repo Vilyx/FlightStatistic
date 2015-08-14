@@ -41,7 +41,7 @@ namespace OLDD
 			}
 		}
 
-		public bool Revert(long currentTime)
+		public virtual bool Revert(long currentTime)
 		{
 			if (_subsequentEvents == null) return false;
 			int removedCount = _subsequentEvents.RemoveAll(x => x.time > currentTime);

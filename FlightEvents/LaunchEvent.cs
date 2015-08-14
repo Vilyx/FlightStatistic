@@ -28,7 +28,16 @@ namespace OLDD
 		public double maxSpeed;
 		[JsonMember]
 		public float sciencePoints;
+		[JsonMember]
+		public double maxGee;
 
+		public override bool Revert(long currentTime)
+		{
+			bool removed = base.Revert(currentTime);
+			maxGee = GetEventMaxGee();
+			maxSpeed = GetEventMaxSpeed();
+			return removed;
+		}
 		public long GetTotalFlightTime()
 		{
 			long totalTime = 0;
@@ -216,6 +225,19 @@ namespace OLDD
 			}
 			return maxSpeed;
 		}
+		internal double GetEventMaxGee()
+		{
+			double gee = 0;
+			for (int i = 0; i < subsequentEvents.Count; i++)
+			{
+				FlightEvent flightEvent = subsequentEvents[i];
+				if (flightEvent is MaxGeeEvent)
+				{
+					gee = (flightEvent as MaxGeeEvent).gee;
+				}
+			}
+			return gee;
+		}
 
 		internal float GetSciencePoints()
 		{
@@ -275,6 +297,52 @@ namespace OLDD
 					return true;
 			}
 			return false;
+		}
+
+		internal bool IsFlightEnded()
+		{
+			foreach (var item in subsequentEvents)
+			{
+				if (item is EndFlightEvent)
+					return true;
+			}
+			return false;
+		}
+
+		internal string GetBiomes()
+		{
+			string biomes = "";
+			bool first = true;
+			foreach (var item in subsequentEvents)
+			{
+				if (item is LandingEvent)
+				{
+					biomes += (first ? "" : ", ") +(item as LandingEvent).biome;
+					first = false;
+				}
+			}
+			return biomes;
+		}
+		public string GetTask()
+		{
+			string task = "atmospheric";
+			foreach (var item in subsequentEvents)
+			{
+				if (item is SOIChangeEvent && subsequentEvents[0] != item)
+				{
+					task = "interplanetary";
+					return task;
+				}
+				else if (item is OrbitReachingEvent && task == "atmospheric")
+				{
+					task = "suborbital";
+				}
+				else if (item is StableOrbitEvent)
+				{
+					task = "orbital";
+				}
+			}
+			return task;
 		}
 	}
 }
