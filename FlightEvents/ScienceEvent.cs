@@ -11,5 +11,7 @@ namespace OLDD
 	{
 		[JsonMember]
 		public float sciencePoints;
+		[JsonMember]
+		public string title;
 	}
 }

@@ -90,6 +90,7 @@
     <Compile Include="SOIChangeEvent.cs" />
     <Compile Include="SortLaunchesParameter.cs" />
     <Compile Include="StatisticVehiclePart.cs" />
+    <Compile Include="Utils.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

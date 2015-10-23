@@ -9,5 +9,7 @@ namespace OLDD
 	[JsonOptIn]
 	class StableOrbitEvent : FlightEvent
 	{
+		[JsonMember]
+		public float mass;
 	}
 }

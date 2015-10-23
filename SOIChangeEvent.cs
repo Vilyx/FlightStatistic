@@ -11,5 +11,7 @@ namespace OLDD
 	{
 		[JsonMember]
 		public string soiName;
+		[JsonMember]
+		public float mass;
 	}
 }

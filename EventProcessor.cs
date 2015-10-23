@@ -14,7 +14,7 @@ namespace OLDD
 		public List<LaunchEvent> launches = new List<LaunchEvent>();
 		public List<LaunchCrewEvent> crewLaunches = new List<LaunchCrewEvent>();
 
-		internal void UpdateMaxSpeed()
+		internal void UpdateDynamic()
 		{
 			if (FlightGlobals.ActiveVessel == null) return;
 			LaunchEvent activeLaunch = GetLaunch(FlightGlobals.ActiveVessel);
@@ -44,6 +44,12 @@ namespace OLDD
 					if (altitude - FlightGlobals.ActiveVessel.terrainAltitude > 10)
 						activeLaunch.AddEvent(new FlyingEvent());
 				}
+				float currentMass = 0;
+				foreach (var part in FlightGlobals.ActiveVessel.parts)
+				{
+					currentMass += part.GetResourceMass() + part.mass;
+				}
+				activeLaunch.currentMass = currentMass;
 			}
 		}
 		public void RecordMaxSpeed()
@@ -54,7 +60,8 @@ namespace OLDD
 			{
 				MaxSpeedEvent maxSpEv = new MaxSpeedEvent();
 				maxSpEv.speed = activeLaunch.maxSpeed;
-				activeLaunch.AddEvent(maxSpEv);
+				if(activeLaunch.GetEventMaxSpeed() < activeLaunch.maxSpeed)
+					activeLaunch.AddEvent(maxSpEv);
 			}
 		}
 		public void RecordMaxGee()
@@ -65,7 +72,8 @@ namespace OLDD
 			{
 				MaxGeeEvent maxGeeEv = new MaxGeeEvent();
 				maxGeeEv.gee = activeLaunch.maxGee;
-				activeLaunch.AddEvent(maxGeeEv);
+				if(activeLaunch.maxGee > activeLaunch.GetEventMaxGee())
+					activeLaunch.AddEvent(maxGeeEv);
 
 				foreach (ProtoCrewMember kerbal in FlightGlobals.ActiveVessel.GetVesselCrew())
 				{
@@ -74,7 +82,8 @@ namespace OLDD
 					{
 						MaxGeeCrewEvent geeEv = new MaxGeeCrewEvent();
 						geeEv.gee = activeLaunch.maxGee;
-						crewLaunch.AddEvent(geeEv);
+						if(crewLaunch.GetEventMaxGee() < activeLaunch.maxGee)
+							crewLaunch.AddEvent(geeEv);
 					}
 				}
 			}
@@ -96,6 +105,7 @@ namespace OLDD
 
 		private void RecordLaunch(Vessel vessel)
 		{
+
 			LaunchEvent launch = new LaunchEvent();
 			launch.shipName = vessel.protoVessel.vesselName;
 			if (launch.shipName == null) launch.shipName = "Just decoupled";
@@ -133,6 +143,7 @@ namespace OLDD
 			launch.launchMass = launchMass;
 
 			SOIChangeEvent soiInitial = new SOIChangeEvent();
+			soiInitial.mass = launchMass;
 			soiInitial.soiName = vessel.mainBody.name;
 			launch.AddEvent(soiInitial);
 
@@ -361,6 +372,11 @@ namespace OLDD
 		public void OnVesselSOIChanged(GameEvents.HostedFromToAction<Vessel, CelestialBody> data)
 		{
 			SOIChangeEvent soiChange = new SOIChangeEvent();
+			soiChange.mass = 0;
+			foreach (var part in data.host.parts)
+			{
+				soiChange.mass += part.GetResourceMass() + part.mass;
+			}
 			soiChange.soiName = data.host.mainBody.name;
 			LaunchEvent launch = GetLaunch(data.host);
 			if (launch != null)
@@ -486,6 +502,26 @@ namespace OLDD
 			}
 			return cost.ToString();
 		}
+		internal string GetTotalCostPilots()
+		{
+			float cost = 0;
+			foreach (var item in launches)
+			{
+				if (item.crewMembers.Count > 0)
+					cost += item.launchCost;
+			}
+			return cost.ToString();
+		}
+		internal string GetTotalCostBots()
+		{
+			float cost = 0;
+			foreach (var item in launches)
+			{
+				if (item.crewMembers.Count == 0)
+					cost += item.launchCost;
+			}
+			return cost.ToString();
+		}
 
 		internal string GetTotalLaunches()
 		{
@@ -561,6 +597,7 @@ namespace OLDD
 		{
 			LaunchEvent launch = GetLaunchByVesselId(data2.vesselID.ToString());
 			ScienceEvent scienceEvent = new ScienceEvent();
+			scienceEvent.title = data1.title;
 			scienceEvent.sciencePoints = data0;
 			launch.AddEvent(scienceEvent);
 		}
@@ -653,6 +690,12 @@ namespace OLDD
 			if (launch != null)
 			{
  				StableOrbitEvent stableEvent = new StableOrbitEvent();
+				stableEvent.mass = 0;
+				foreach (var part in vessel.parts)
+				{
+					stableEvent.mass += part.GetResourceMass() + part.mass;
+				}
+
 				launch.AddEvent(stableEvent);
 			}
 			/*if (FlightGlobals.ActiveVessel == null) return;
@@ -705,6 +748,49 @@ namespace OLDD
 					}
 				}
 				RecordLaunch(vessel);
+			}
+		}
+
+		internal void OnCrewChanged(GameEvents.FromToAction<Part, Part> evaBoardData)
+		{
+			LaunchEvent launch = GetLaunch(evaBoardData.from.vessel);
+			if (launch != null)
+			{
+				launch.checkCrew();
+			}
+			launch = GetLaunch(evaBoardData.to.vessel);
+			if (launch != null)
+			{
+				launch.checkCrew();
+			}
+		}
+
+		internal void OnCrewChanged(EventReport killedData)
+		{
+			LaunchEvent launch = GetLaunch(killedData.origin.vessel);
+			if (launch != null)
+			{
+				launch.checkCrew();
+			}
+			//throw new NotImplementedException();
+		}
+
+		internal void OnCrewChanged(ProtoCrewMember hiredLeftSackedData, int data1)
+		{
+			//hiredLeftSackedData.
+		}
+
+		internal void OnCrewChanged(GameEvents.HostedFromToAction<ProtoCrewMember, Part> transferredData)
+		{
+			LaunchEvent launch = GetLaunch(transferredData.from.vessel);
+			if (launch != null)
+			{
+				launch.checkCrew();
+			}
+			launch = GetLaunch(transferredData.to.vessel);
+			if (launch != null)
+			{
+				launch.checkCrew();
 			}
 		}
 	}

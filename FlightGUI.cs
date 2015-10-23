@@ -56,7 +56,7 @@ namespace OLDD
 		private Rect flightWindowRect = new Rect(40, 100, 800, 500);
 		private Rect kerbalWindowRect = new Rect(40, 100, 800, 500);
 
-		private static readonly String ROOT_PATH = GetRootPath();
+		private static readonly String ROOT_PATH = Utils.GetRootPath();
 		private static readonly String SAVE_BASE_FOLDER = ROOT_PATH + "/saves/"; // suggestion/hint from Cydonian Monk
 		private static readonly String RESOURCE_PATH = "OLDD/FlightStatistic/Resource/";
 		private GUIStyle activeStyle;
@@ -76,7 +76,13 @@ namespace OLDD
 		private bool showInAction = true;
 		private bool reverseSortLaunches = true;
 		private SortLaunchesParameter sortLaunchesParameter = SortLaunchesParameter.DATE;
-		
+		private GUIContent hintContent = new GUIContent("Button 1", "Button 1");
+
+		private int popupWindowWidth = 200;
+		private Rect popupWindowRect = new Rect(20, 80, 10, 10);
+		private bool showPopup = false;
+		private ArrayList popupTexts = new ArrayList();
+		private string hover;
 		
 
 		void Awake()
@@ -124,6 +130,7 @@ namespace OLDD
 			if (isStatisticOpened)
 			{
 				mainWindowRect = GUI.Window(1001, mainWindowRect, DrawMainWindow, "Statistic");
+				if (showPopup) popupWindowRect = GUILayout.Window(1006, popupWindowRect, DrawPopupWindow, "");
 				if (needToShowFlight && toolbarInt == 0)
 				{
 					flightWindowRect = GUI.Window(1002, flightWindowRect, DrawFlightWindow, "");
@@ -133,11 +140,69 @@ namespace OLDD
 					kerbalWindowRect = GUI.Window(1003, kerbalWindowRect, DrawKerbalWindow, "");
 				}
 			}
+			ProcessPopup();
 			GUI.skin.label.fontSize = temp;
 			GUI.skin.button.fontSize = temp;
 			GUI.skin.box.fontSize = temp;
 
-			EventProcessor.Instance.UpdateMaxSpeed();
+			EventProcessor.Instance.UpdateDynamic();
+		}
+		private void ProcessPopup()
+		{
+			
+
+			string newHover = GUI.tooltip;
+			if (newHover != "")
+			{
+				Debug.Log(newHover);
+			}
+			if (Event.current.type == EventType.Repaint && newHover != hover)
+			{
+				hover = newHover;
+				if (hover == "Masses")
+				{
+					LaunchEvent launch = EventProcessor.Instance.launches[flightIdToShow];
+					popupTexts = launch.GetMasses();
+					showPopup = true;
+				}
+				else if (hover == "Biomes")
+				{
+					LaunchEvent launch = EventProcessor.Instance.launches[flightIdToShow];
+					popupTexts = launch.GetBiomes();
+					showPopup = true;
+				}
+				else if (hover == "Science points")
+				{
+					LaunchEvent launch = EventProcessor.Instance.launches[flightIdToShow];
+					popupTexts = launch.GetExperiments();
+					showPopup = true;
+				}
+				else
+				{
+					showPopup = false;
+				}
+				popupWindowRect.height = 1;
+				popupWindowRect.width = 1;
+			}
+			popupWindowRect.x = Input.mousePosition.x;
+			popupWindowRect.y = Screen.height - Input.mousePosition.y;
+		}
+		private void DrawPopupWindow(int windowID)
+		{
+			for (int i = 0; i < popupTexts.Count; i++)
+			{
+				GUILayout.BeginHorizontal(GUILayout.Width(popupWindowWidth));
+				if (popupTexts[i] is List<string>)
+				{
+					foreach (string str in (popupTexts[i] as List<string>))
+						GUILayout.Label(str);
+				}
+				else
+				{
+					GUILayout.Label(popupTexts[i].ToString());
+				}
+				GUILayout.EndHorizontal();
+			}
 		}
 		private void InitEventListeners()
 		{
@@ -149,6 +214,14 @@ namespace OLDD
 			GameEvents.onCrewBoardVessel.Add(EventProcessor.Instance.OnCrewBoardVessel);
 			GameEvents.OnScienceRecieved.Add(EventProcessor.Instance.OnScienceReceived);
 			GameEvents.onVesselRename.Add(EventProcessor.Instance.OnVesselRename);
+
+			GameEvents.onCrewBoardVessel.Add(EventProcessor.Instance.OnCrewChanged);
+			GameEvents.onCrewOnEva.Add(EventProcessor.Instance.OnCrewChanged);
+			GameEvents.onCrewKilled.Add(EventProcessor.Instance.OnCrewChanged);
+			GameEvents.OnCrewmemberHired.Add(EventProcessor.Instance.OnCrewChanged);
+			GameEvents.OnCrewmemberLeftForDead.Add(EventProcessor.Instance.OnCrewChanged);
+			GameEvents.OnCrewmemberSacked.Add(EventProcessor.Instance.OnCrewChanged);
+			GameEvents.onCrewTransferred.Add(EventProcessor.Instance.OnCrewChanged);
 
 			//GameEvents.onVesselTerminated.Add(EventProcessor.Instance.OnVesselTerminated);
 			GameEvents.onCrewKilled.Add(EventProcessor.Instance.OnCrewKilled);
@@ -278,7 +351,7 @@ namespace OLDD
 			DrawKerbalsColumn(kerbals, "№", "posInTable", (object obj) => { return obj.ToString(); });
 			DrawKerbalsColumn(kerbals, "Kerbal name", "name", (object obj) => { return obj.ToString(); });
 			DrawKerbalsColumn(kerbals, "Flights", "GetLaunchesCount", (object obj) => { return obj.ToString(); });
-			DrawKerbalsColumn(kerbals, "Total flight time", "GetTotalFlightTime", (object obj) => { return TicksToTotalTime(obj.ToString()); });
+			DrawKerbalsColumn(kerbals, "Total flight time", "GetTotalFlightTime", (object obj) => { return Utils.TicksToTotalTime(obj.ToString()); });
 
 			GUILayout.EndHorizontal();
 			GUILayout.FlexibleSpace();
@@ -381,13 +454,13 @@ namespace OLDD
 			
 			GUILayout.Label(kerbal.name);
 			GUILayout.Label(kerbal.GetLaunchesCount().ToString());
-			GUILayout.Label(CorrectNumber(kerbal.maxGee.ToString()) + " G");
-			GUILayout.Label(TicksToTotalTime(kerbal.GetTotalFlightTime()));
-			GUILayout.Label(TicksToTotalTime(kerbal.GetTotalEvasTime()));
+			GUILayout.Label(Utils.CorrectNumber(kerbal.maxGee.ToString()) + " G");
+			GUILayout.Label(Utils.TicksToTotalTime(kerbal.GetTotalFlightTime()));
+			GUILayout.Label(Utils.TicksToTotalTime(kerbal.GetTotalEvasTime()));
 			GUILayout.Label(kerbal.GetEvasCount().ToString());
 			GUILayout.Label(kerbal.GetDockingsCount().ToString());
 			GUILayout.Label(kerbal.GetLandingsCount().ToString());
-			GUILayout.Label(TicksToTotalTime(kerbal.GetIdleTime()));
+			GUILayout.Label(Utils.TicksToTotalTime(kerbal.GetIdleTime()));
 			GUILayout.EndVertical();
 			GUILayout.BeginVertical();
 			GUILayout.Box("Ships");
@@ -399,6 +472,8 @@ namespace OLDD
 			GUILayout.EndScrollView();
 			GUILayout.EndVertical();
 			GUILayout.EndHorizontal();
+
+			ProcessPopup();
 			GUI.DragWindow(new Rect(0, 0, 10000, 20));
 		}
 
@@ -406,7 +481,7 @@ namespace OLDD
 		{
 			float divideCoef = 6.5f;
 			// Begin the ScrollView
-			scrollViewVector = GUILayout.BeginScrollView(scrollViewVector);
+			scrollViewVector = GUILayout.BeginScrollView(scrollViewVector, GUIStyle.none, GUI.skin.verticalScrollbar);
 			GUILayout.BeginHorizontal();
 			showMannedLaunches = GUILayout.Toggle(showMannedLaunches, "Manned", GUILayout.Width(mainWindowRect.width / divideCoef));
 			if (!showMannedLaunches && !showUnmannedLaunches) showUnmannedLaunches = true;
@@ -432,8 +507,8 @@ namespace OLDD
 			DrawFlightsColumn(0,launches, "№", "posInTable", (object obj) => { return obj.ToString(); });
 			DrawFlightsColumn(1,launches, "Vessel", "shipName", (object obj) => { return obj.ToString(); });
 			DrawFlightsColumn(4,launches, "Task", "GetTask", (object obj) => { return obj.ToString(); });
-			DrawFlightsColumn(2,launches, "Launch date", "time", (object obj) => { return TicksToDate(obj.ToString()); });
-			DrawFlightsColumn(3,launches, "Cost", "launchCost", (object obj) => { return CorrectNumber(obj.ToString()); });
+			DrawFlightsColumn(2,launches, "Launch date", "time", (object obj) => { return Utils.TicksToDate(obj.ToString()); });
+			DrawFlightsColumn(3,launches, "Cost", "launchCost", (object obj) => { return Utils.CorrectNumber(obj.ToString()); });
 			GUILayout.EndHorizontal();
 			GUILayout.FlexibleSpace();
 			GUILayout.EndScrollView();
@@ -616,52 +691,61 @@ namespace OLDD
 			GUILayout.Label("Launch date", boldtext);
 			GUILayout.Label("Launch mass", boldtext);
 			GUILayout.Label("Cost", boldtext);
-			GUILayout.Label("Mass on orbit", boldtext);
+			hintContent.text = "Close Orbit/SOI masses";
+			hintContent.tooltip = "Masses";
+			GUILayout.Label(hintContent, boldtext);
 			GUILayout.Label("Docked", boldtext);
 			GUILayout.Label("EVAs", boldtext);
 			GUILayout.Label("Max speed", boldtext);
 			GUILayout.Label("Max Gee", boldtext);
-			GUILayout.Label("Landings", boldtext);
+			hintContent.text = "Landings";
+			hintContent.tooltip = "Biomes";
+			GUILayout.Label(hintContent, boldtext);
 			GUILayout.Label("End date", boldtext);
 			GUILayout.Label("Duration", boldtext);
 			GUILayout.Label("Final mass", boldtext);
-			GUILayout.Label("Science points", boldtext);
-			GUILayout.Label("Biomes", boldtext);
+			hintContent.text = "Science points";
+			hintContent.tooltip = "Science points";
+			GUILayout.Label(hintContent, boldtext);
 			GUILayout.EndVertical();
 
 			GUILayout.BeginVertical(GUILayout.Width(400));
 			GUILayout.Label(launch.shipName);
-			GUILayout.Label(TicksToDate(launch.time));
-			GUILayout.Label(CorrectNumber(launch.launchMass.ToString(), 3));
-			GUILayout.Label(CorrectNumber(launch.launchCost.ToString()));
+			GUILayout.Label(Utils.TicksToDate(launch.time));
+			GUILayout.Label(Utils.CorrectNumber(launch.launchMass.ToString(), 3));
+			GUILayout.Label(Utils.CorrectNumber(launch.launchCost.ToString()));
 			float massOnOrbit = launch.GetMassOnOrbit();
 			string massOnOrbitText = "-";
 			if (massOnOrbit > 0) massOnOrbitText = massOnOrbit.ToString();
-			GUILayout.Label(CorrectNumber(massOnOrbitText));
+			hintContent.text = Utils.CorrectNumber(massOnOrbitText);
+			hintContent.tooltip = "Masses";
+			GUILayout.Label(hintContent);
 			GUILayout.Label(launch.GetDockings().ToString());
 			GUILayout.Label(launch.GetEvas().ToString());
-			GUILayout.Label(CorrectNumber(launch.maxSpeed.ToString()) + "m/s");
-			GUILayout.Label(CorrectNumber(launch.maxGee.ToString()) + " G");
-			GUILayout.Label(launch.GetLandingsCount().ToString());
+			GUILayout.Label(Utils.CorrectNumber(launch.maxSpeed.ToString()) + "m/s");
+			GUILayout.Label(Utils.CorrectNumber(launch.maxGee.ToString()) + " G");
+			hintContent.text = launch.GetLandingsCount().ToString();
+			hintContent.tooltip = "Biomes";
+			GUILayout.Label(hintContent);
 
 			long endDate = launch.GetEndDate();
 			if (endDate != -1)
 			{
-				GUILayout.Label(TicksToDate(endDate));
-				GUILayout.Label(TicksToTotalTime(launch.GetTotalFlightTime()));
-				GUILayout.Label(CorrectNumber(launch.GetFinalMass().ToString(), 3));
+				GUILayout.Label(Utils.TicksToDate(endDate));
+				GUILayout.Label(Utils.TicksToTotalTime(launch.GetTotalFlightTime()));
 			}
 			else
 			{
 				GUILayout.Label("-");
-				GUILayout.Label(TicksToTotalTime(launch.GetTotalFlightTime()));
-				GUILayout.Label("-");
+				GUILayout.Label(Utils.TicksToTotalTime(launch.GetTotalFlightTime()));
 			}
+			GUILayout.Label(Utils.CorrectNumber(launch.GetFinalMass().ToString(), 3));
 			float sciencePoints = launch.GetSciencePoints();
 			string sciencePointsText = "-";
-			if (sciencePoints > 0) sciencePointsText = CorrectNumber(sciencePoints.ToString());
+			if (sciencePoints > 0) sciencePointsText = Utils.CorrectNumber(sciencePoints.ToString());
+			hintContent.text = sciencePointsText;
+			hintContent.tooltip = "Science points";
 			GUILayout.Label(sciencePointsText);
-			GUILayout.Label(launch.GetBiomes());
 			GUILayout.EndVertical();
 
 			GUILayout.BeginVertical();
@@ -673,9 +757,10 @@ namespace OLDD
 			foreach (FlightEvent record in sois)
 			{
 				if(record is SOIChangeEvent)
-					GUILayout.Label(TicksToDate(record.time) + " \t " + (record as SOIChangeEvent).soiName.ToString());
-				else if((record as LandingEvent).mainBodyName != "Kerbin")
-					GUILayout.Label(TicksToDate(record.time) + " \t Land:" + (record as LandingEvent).mainBodyName.ToString());
+					GUILayout.Label(Utils.TicksToDate(record.time) + " \t " + (record as SOIChangeEvent).soiName.ToString());
+				else
+					GUILayout.Label(Utils.TicksToDate(record.time) + " \t Land:" + (record as LandingEvent).mainBodyName.ToString() 
+						+ ":" + (record as LandingEvent).biome.ToString());
 			}
 			GUILayout.EndScrollView();
 			GUILayout.Box("Initial crew");
@@ -697,6 +782,8 @@ namespace OLDD
 			GUILayout.BeginVertical();
 			GUILayout.EndVertical();
 			GUILayout.EndHorizontal();
+
+			ProcessPopup();
 			GUI.DragWindow(new Rect(0, 0, 10000, 20));
 		}
 
@@ -710,78 +797,21 @@ namespace OLDD
 			GUI.color = normalColor;
 			GUILayout.BeginHorizontal();
 			//общая стоимость (увеличивается с каждым полетом), общее количество полетов, общая длительность.
-			GUILayout.Label("Total cost: " + EventProcessor.Instance.GetTotalCost() + "\t");
+			GUILayout.BeginVertical();
+			GUILayout.Label("Total cost: " + EventProcessor.Instance.GetTotalCost());
+			GUILayout.Label("manned: " + EventProcessor.Instance.GetTotalCostPilots() + " unmanned: " + EventProcessor.Instance.GetTotalCostBots());
+			GUILayout.EndVertical();
 			GUILayout.BeginVertical();
 			GUILayout.Label("Total launches: " + EventProcessor.Instance.GetTotalLaunches() + "    manned: " + EventProcessor.Instance.GetTotalTimesPilots());
 			GUILayout.Label("                                       unmanned: " + EventProcessor.Instance.GetTotalTimesBots());
 			GUILayout.EndVertical();
 			GUILayout.BeginVertical();
-			GUILayout.Label("Total time manned: " + TicksToTotalTime(EventProcessor.Instance.GetTotalTimePilots()));
-			GUILayout.Label("               unmanned: " + TicksToTotalTime(EventProcessor.Instance.GetTotalTimeBots()));
+			GUILayout.Label("Total time manned: " + Utils.TicksToTotalTime(EventProcessor.Instance.GetTotalTimePilots()));
+			GUILayout.Label("               unmanned: " + Utils.TicksToTotalTime(EventProcessor.Instance.GetTotalTimeBots()));
 			GUILayout.EndVertical();
 			GUILayout.EndHorizontal();
 		}
 
-		protected string CorrectNumber(string num, int cAD = 2)
-		{
-			string strToRet = num;
-			int commaIndex = strToRet.IndexOf(".");
-			if (commaIndex != -1 && strToRet.Length > commaIndex + cAD + 1)
-			{
-				strToRet = strToRet.Substring(0, commaIndex + cAD + 1);
-			}
-			else if (commaIndex == -1)
-			{
-				commaIndex = strToRet.Length;
-			}
-			for (int i = commaIndex - 3; i > 0; i -= 3)
-				strToRet = strToRet.Insert(i, " ");
-			return strToRet;
-		}
-		private string TicksToDate(object p)
-		{
-			if (p == null) return "-";
-			/*60 Kerbin seconds per Kerbin minute
-			60 Kerbin minutes per Kerbin hour
-			6 Kerbin hours per Kerbin day
-			6.43 Kerbin days per Kerbin month
-			426.08 Kerbin days per Kerbin year*/
-			double seconds = long.Parse(p.ToString()) / TimeSpan.TicksPerSecond;
-			long minutes = (long)(seconds / 60);
-			long hours = (long)(minutes / 60);
-			long days = (long)(hours / 6);
-			long years = (long)(days / 426.08);
 
-			string yearsStr = EnlargeByZeroes((years + 1).ToString(), 2);
-			string daysStr = EnlargeByZeroes(((long)(days - years * 426.08) + 1).ToString(), 2);
-			string hoursStr = EnlargeByZeroes((hours - days * 6).ToString(), 2);
-			string minutesStr = EnlargeByZeroes((minutes - hours * 60).ToString(), 2);
-			string secondsStr = EnlargeByZeroes((seconds - minutes * 60).ToString(), 2);
-			return yearsStr + "." + daysStr + "/" + hoursStr + ":" + minutesStr + ":" + secondsStr;
-		}
-		private string TicksToTotalTime(object p)
-		{
-			if (p == null) return "-";
-			long ticks = long.Parse(p.ToString());
-			long days = ticks / (TimeSpan.TicksPerDay/4);
-			long hours = ticks % (TimeSpan.TicksPerDay/4) / TimeSpan.TicksPerHour;
-			long minutes = ticks % TimeSpan.TicksPerHour / TimeSpan.TicksPerMinute;
-			long seconds = ticks % TimeSpan.TicksPerMinute / TimeSpan.TicksPerSecond;
-			return "D" + days.ToString() + ", " + hours.ToString() + ":" + EnlargeByZeroes(minutes.ToString(), 2) + ":" + EnlargeByZeroes(seconds.ToString(), 2);
-		}
-		private string EnlargeByZeroes(string source, int minLen)
-		{
-			while (source.Length < minLen)
-				source = "0" + source;
-			return source;
-		}
-		public static String GetRootPath()
-		{
-			String path = KSPUtil.ApplicationRootPath;
-			path = path.Replace("\\", "/");
-			if (path.EndsWith("/")) path = path.Substring(0, path.Length - 1);
-			//
-			return path;
-		}
 	}
 }

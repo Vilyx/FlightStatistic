@@ -1,5 +1,6 @@
 ﻿using Pathfinding.Serialization.JsonFx;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -30,6 +31,8 @@ namespace OLDD
 		public float sciencePoints;
 		[JsonMember]
 		public double maxGee;
+		[JsonMember]
+		public float currentMass;
 
 		public override bool Revert(long currentTime)
 		{
@@ -64,6 +67,7 @@ namespace OLDD
 		{
 			long totalTime = 0;
 			FlightEvent currentStart = this;
+			FlightEvent lastStart = null;
 			for (int i = 0; i < subsequentEvents.Count; i++)
 			{
 				FlightEvent flightEvent = subsequentEvents[i];
@@ -73,7 +77,9 @@ namespace OLDD
 				}
 				else if (flightEvent is EndFlightEvent || flightEvent is FinishMissionEvent)
 				{
+					if (currentStart == null) currentStart = lastStart;
 					totalTime += flightEvent.time - currentStart.time;
+					lastStart = currentStart;
 					currentStart = null;
 				}
 			}
@@ -110,6 +116,7 @@ namespace OLDD
 		internal object GetFinalMass()
 		{
 			if (subsequentEvents.Count == 0) return -1;
+			if (GetEndDate() == -1) return currentMass;
 			FlightEvent flightEvent = subsequentEvents[subsequentEvents.Count - 1];
 			if (flightEvent is EndFlightEvent)
 			{
@@ -308,21 +315,6 @@ namespace OLDD
 			}
 			return false;
 		}
-
-		internal string GetBiomes()
-		{
-			string biomes = "";
-			bool first = true;
-			foreach (var item in subsequentEvents)
-			{
-				if (item is LandingEvent)
-				{
-					biomes += (first ? "" : ", ") +(item as LandingEvent).biome;
-					first = false;
-				}
-			}
-			return biomes;
-		}
 		public string GetTask()
 		{
 			string task = "atmospheric";
@@ -343,6 +335,69 @@ namespace OLDD
 				}
 			}
 			return task;
+		}
+
+		public ArrayList GetMasses()
+		{
+			ArrayList popupTexts = new ArrayList();
+
+			string currentSoi = "Kerbin";
+			foreach (var subEvent in subsequentEvents)
+			{
+				if (subEvent is SOIChangeEvent)
+				{
+					List<string> item = new List<string>();
+					currentSoi = (subEvent as SOIChangeEvent).soiName;
+					item.Add(currentSoi);
+					item.Add(Utils.CorrectNumber((subEvent as SOIChangeEvent).mass.ToString(), 3));
+					popupTexts.Add(item);
+				}
+				else if (subEvent is StableOrbitEvent)
+				{
+					List<string> item = new List<string>();
+					item.Add(currentSoi+"-orbit");
+					item.Add(Utils.CorrectNumber((subEvent as StableOrbitEvent).mass.ToString(), 3));
+					popupTexts.Add(item);
+				}
+			}
+			return popupTexts;
+		}
+
+		internal ArrayList GetBiomes()
+		{
+			ArrayList biomes = new ArrayList();
+			foreach (var subEvent in subsequentEvents)
+			{
+				if (subEvent is LandingEvent)
+				{
+					List<string> item = new List<string>();
+					item.Add((subEvent as LandingEvent).mainBodyName);
+					item.Add((subEvent as LandingEvent).biome);
+					biomes.Add(item);
+				}
+			}
+			return biomes;
+		}
+
+		internal ArrayList GetExperiments()
+		{
+			ArrayList biomes = new ArrayList();
+			foreach (var subEvent in subsequentEvents)
+			{
+				if (subEvent is ScienceEvent)
+				{
+					List<string> item = new List<string>();
+					item.Add((subEvent as ScienceEvent).title);
+					item.Add((subEvent as ScienceEvent).sciencePoints.ToString());
+					biomes.Add(item);
+				}
+			}
+			return biomes;
+		}
+
+		internal void checkCrew()
+		{
+			//TODO: check crew
 		}
 	}
 }
