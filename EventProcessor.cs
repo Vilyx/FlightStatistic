@@ -16,6 +16,7 @@ namespace OLDD
 
 		internal void UpdateDynamic()
 		{
+			if (!HighLogic.LoadedSceneIsFlight) return;
 			if (FlightGlobals.ActiveVessel == null) return;
 			LaunchEvent activeLaunch = GetLaunch(FlightGlobals.ActiveVessel);
 			if (activeLaunch != null)
