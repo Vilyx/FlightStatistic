@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using KSP.UI.Screens;
 using UnityEngine;
 
 namespace OLDD
@@ -182,17 +183,6 @@ namespace OLDD
 			}
 			return null;
 		}
-		public void OnRecoveryProcessing(ProtoVessel data0, MissionRecoveryDialog data1, float data2)
-		{
-			foreach (var launch in launches)
-			{
-				if (data0.vesselID.ToString() == launch.shipID)
-				{
-					launch.SetSciencePoints(data1.scienceEarned);
-				}
-			}
-			FlightGUI.SaveData();
-		}
 
 		public void OnVesselRecoveryRequested(Vessel vessel)
 		{
@@ -225,6 +215,36 @@ namespace OLDD
 			}
 			FlightGUI.SaveData();
 		}
+
+		internal void OnEndFlight(ProtoVessel protoVessel, bool data1)
+		{
+			LaunchEvent launch = GetLaunchByVesselId(protoVessel.vesselID.ToString());
+			if (launch == null || launch.GetLastEvent() is EndFlightEvent) return;
+			EndFlightEvent endFlight = new EndFlightEvent();
+			endFlight.finalMass = 0;
+			foreach (var part in protoVessel.protoPartSnapshots)
+			{
+				endFlight.finalMass += part.mass;
+			}
+			endFlight.crewMembers = new List<string>();
+			foreach (var kerbal in protoVessel.GetVesselCrew())
+				endFlight.crewMembers.Add(kerbal.name);
+			launch.AddEvent(endFlight);
+			FlightGUI.SaveData();
+		}
+
+		internal void OnRecoveryProcessing(ProtoVessel data0, MissionRecoveryDialog data1, float data2)
+		{
+			foreach (var launch in launches)
+			{
+				if (data0.vesselID.ToString() == launch.shipID)
+				{
+					launch.SetSciencePoints(data1.scienceEarned);
+				}
+			}
+			FlightGUI.SaveData();
+		}
+
 		private LaunchEvent GetLaunch(Vessel vessel)
 		{
 			if (vessel == null) return null;
@@ -475,23 +495,6 @@ namespace OLDD
 				activeLaunch.maxSpeed = activeLaunch.GetEventMaxSpeed();
 				activeLaunch.maxGee = activeLaunch.GetEventMaxGee();
 			}
-		}
-
-		internal void OnEndFlight(ProtoVessel protoVessel)
-		{
-			LaunchEvent launch = GetLaunchByVesselId(protoVessel.vesselID.ToString());
-			if (launch == null || launch.GetLastEvent() is EndFlightEvent) return;
-			EndFlightEvent endFlight = new EndFlightEvent();
-			endFlight.finalMass = 0;
-			foreach (var part in protoVessel.protoPartSnapshots)
-			{
-				endFlight.finalMass += part.mass;
-			}
-			endFlight.crewMembers = new List<string>();
-			foreach (var kerbal in protoVessel.GetVesselCrew())
-				endFlight.crewMembers.Add(kerbal.name);
-			launch.AddEvent(endFlight);
-			FlightGUI.SaveData();
 		}
 
 		internal string GetTotalCost()

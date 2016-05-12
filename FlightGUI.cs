@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -91,9 +91,9 @@ namespace OLDD
 			{
 				Instance = this;
 				InitEventListeners();
+
 			}
 		}
-
 
 		void OnGUI()
 		{
@@ -123,7 +123,7 @@ namespace OLDD
 			boldtext.fontStyle = FontStyle.Bold;
 			boldtext.wordWrap = false;
 			//myCustomStyle.clipping = TextClipping.clip;
-			int someInt = 14;
+			int someInt = 12;
 			GUI.skin.label.fontSize = someInt;
 			GUI.skin.button.fontSize = someInt;
 			GUI.skin.box.fontSize = someInt;
@@ -240,16 +240,26 @@ namespace OLDD
 		}
 		private void OnGameStateCreated(Game game)
 		{
-			// no game, no fun
-			if (game == null)
+			if (game != null)
 			{
-				return;
+				Debug.Log("FlightStatistic::OnGameStateCreated gameTitle=" + game.Title);
+				String name = game.Title;
+				if (name != null && name.Length>0)
+					Utils.userName = name.Substring(0, name.IndexOf("(") - 1);
 			}
 			LoadData();
 			EventProcessor.Instance.Revert();
 		}
 		private void OnGameStateLoad(ConfigNode data)
 		{
+			if (data != null)
+			{
+				String name = data.GetValue("Title");
+				if(name != null)
+					Utils.userName = name.Substring(0, name.IndexOf("(") - 1);
+				Debug.Log("FlightStatistic::OnGameStateLoad userName=" + Utils.userName);
+			}
+
 			LoadData();
 			EventProcessor.Instance.Revert();
 		}
@@ -257,8 +267,7 @@ namespace OLDD
 		{
 			EventProcessor.Instance.crewLaunches = null;
 			EventProcessor.Instance.launches = null;
-
-			String savePath = SAVE_BASE_FOLDER + HighLogic.SaveFolder + "/";
+			String savePath = SAVE_BASE_FOLDER + Utils.userName + "/";
 			if (File.Exists(savePath + "statistic.json"))
 			{
 				using (StreamReader sr = new StreamReader(File.Open(savePath + "statistic.json", FileMode.Open), Encoding.UTF8))
@@ -299,9 +308,11 @@ namespace OLDD
 		public static void SaveData()
 		{
 			EventProcessor.Instance.OnBeforeSave();
-			String savePath = SAVE_BASE_FOLDER + HighLogic.SaveFolder + "/";
+			String savePath = SAVE_BASE_FOLDER + Utils.userName + "/";
+			Debug.Log("FlightStatistic::SaveData savePath=" + savePath + "statistic_new.json");
 			using (StreamWriter sw = new StreamWriter(File.Open(savePath + "statistic_new.json", FileMode.OpenOrCreate), Encoding.UTF8))
 			{
+				
 				DataHolder dataHolder = new DataHolder();
 				dataHolder.crewLaunches = EventProcessor.Instance.crewLaunches;
 				dataHolder.launches = EventProcessor.Instance.launches;
@@ -312,7 +323,8 @@ namespace OLDD
 				System.IO.File.Delete(savePath + "statistic_old.json");
 			if (System.IO.File.Exists(savePath + "statistic.json"))
 				System.IO.File.Move(savePath + "statistic.json", savePath + "statistic_old.json");
-			System.IO.File.Move(savePath + "statistic_new.json", savePath + "statistic.json");
+			if (System.IO.File.Exists(savePath + "statistic_new.json"))
+				System.IO.File.Move(savePath + "statistic_new.json", savePath + "statistic.json");
 		}
 		void DrawMainWindow(int windowID)
 		{
@@ -798,16 +810,18 @@ namespace OLDD
 			GUILayout.BeginHorizontal();
 			//общая стоимость (увеличивается с каждым полетом), общее количество полетов, общая длительность.
 			GUILayout.BeginVertical();
-			GUILayout.Label("Total cost: " + EventProcessor.Instance.GetTotalCost());
-			GUILayout.Label("manned: " + EventProcessor.Instance.GetTotalCostPilots() + " unmanned: " + EventProcessor.Instance.GetTotalCostBots());
+			GUILayout.Label("Total cost: " + EventProcessor.Instance.GetTotalCost(), GUILayout.Height(10));
+			GUILayout.Label("manned: " + EventProcessor.Instance.GetTotalCostPilots(), GUILayout.Height(10));
+			GUILayout.Label("unmanned: " + EventProcessor.Instance.GetTotalCostBots(), GUILayout.Height(10));
 			GUILayout.EndVertical();
 			GUILayout.BeginVertical();
-			GUILayout.Label("Total launches: " + EventProcessor.Instance.GetTotalLaunches() + "    manned: " + EventProcessor.Instance.GetTotalTimesPilots());
-			GUILayout.Label("                                       unmanned: " + EventProcessor.Instance.GetTotalTimesBots());
+			GUILayout.Label("Total launches: " + EventProcessor.Instance.GetTotalLaunches(), GUILayout.Height(10));
+			GUILayout.Label("manned: " + EventProcessor.Instance.GetTotalTimesPilots(), GUILayout.Height(10));
+			GUILayout.Label("unmanned: " + EventProcessor.Instance.GetTotalTimesBots(), GUILayout.Height(10));
 			GUILayout.EndVertical();
 			GUILayout.BeginVertical();
-			GUILayout.Label("Total time manned: " + Utils.TicksToTotalTime(EventProcessor.Instance.GetTotalTimePilots()));
-			GUILayout.Label("               unmanned: " + Utils.TicksToTotalTime(EventProcessor.Instance.GetTotalTimeBots()));
+			GUILayout.Label("Total time manned: " + Utils.TicksToTotalTime(EventProcessor.Instance.GetTotalTimePilots()), GUILayout.Height(10));
+			GUILayout.Label("             unmanned: " + Utils.TicksToTotalTime(EventProcessor.Instance.GetTotalTimeBots()), GUILayout.Height(10));
 			GUILayout.EndVertical();
 			GUILayout.EndHorizontal();
 		}

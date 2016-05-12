@@ -39,6 +39,9 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>D:\Kerbal Space Program\KSP_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
     </Reference>
+    <Reference Include="KSPUtil">
+      <HintPath>D:\Kerbal Space Program\KSP_Data\Managed\KSPUtil.dll</HintPath>
+    </Reference>
     <Reference Include="Pathfinding.JsonFx">
       <HintPath>..\GameData\OLDD\FlightStatistic\Pathfinding.JsonFx.dll</HintPath>
     </Reference>

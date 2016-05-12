@@ -6,6 +6,7 @@ using System.Text;
 
 class Utils
 {
+	public static string userName;
 	public static string CorrectNumber(string num, int cAD = 2)
 	{
 		string strToRet = num;
